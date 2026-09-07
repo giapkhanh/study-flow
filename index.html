@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TikTok Study - Smart Reading Focus Effect</title>
+
+  <!-- Thư viện PDF.js và Worker -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf_viewer.min.css">
+
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { 
+      background-color: #0a0a0c; 
+      color: #fff; 
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+      overflow: hidden; 
+      position: relative;
+    }
+
+    /* Canvas Hiệu Ứng Thước Đọc & Spotlight */
+    #reading-guide-canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      pointer-events: none;
+      z-index: 9999;
+      mix-blend-mode: multiply; /* Hòa trộn để làm nổi chữ tự nhiên */
+    }
+
+    /* Ambient Glow Nền */
+    body::before {
+      content: '';
+      position: fixed;
+      top: -25%;
+      left: -25%;
+      width: 150%;
+      height: 150%;
+      background: radial-gradient(circle at 35% 35%, rgba(37, 244, 238, 0.08), transparent 50%),
+                  radial-gradient(circle at 65% 65%, rgba(254, 44, 85, 0.08), transparent 50%);
+      animation: pulseGlow 8s ease-in-out infinite alternate;
+      z-index: 0;
+      pointer-events: none;
+    }
+    @keyframes pulseGlow {
+      0% { opacity: 0.6; transform: scale(1); }
+      100% { opacity: 1.0; transform: scale(1.03); }
+    }
+
+    /* Top Bar */
+    .top-bar {
+      position: fixed; top: 0; left: 0; width: 100%; height: 60px;
+      background: rgba(10, 10, 12, 0.88); backdrop-filter: blur(12px);
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 0 20px; z-index: 200; border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .controls { display: flex; gap: 10px; align-items: center; }
+
+    .study-timer {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      padding: 6px 16px;
+      border-radius: 20px;
+      font-family: monospace;
+      font-size: 15px;
+      font-weight: bold;
+      color: #25f4ee;
+      letter-spacing: 1px;
+      box-shadow: 0 0 12px rgba(37, 244, 238, 0.2);
+    }
+
+    .input-url {
+      background: rgba(255, 255, 255, 0.08); border: 1px solid #333; color: #fff;
+      padding: 8px 14px; border-radius: 20px; width: 220px; font-size: 13px; outline: none;
+    }
+    .input-url:focus { border-color: #fe2c55; }
+    .btn {
+      background: #fe2c55; color: #fff; border: none; padding: 8px 16px;
+      border-radius: 20px; font-weight: bold; cursor: pointer; font-size: 13px;
+      transition: transform 0.1s, background 0.2s;
+    }
+    .btn:hover { background: #e02648; transform: scale(1.03); }
+
+    /* Chuyển đổi Mode */
+    .mode-switch { display: flex; background: rgba(255, 255, 255, 0.08); border-radius: 20px; padding: 3px; }
+    .mode-btn {
+      background: none; border: none; color: #888; padding: 6px 16px;
+      font-weight: bold; font-size: 13px; border-radius: 16px; cursor: pointer; transition: all 0.2s;
+    }
+    .mode-btn.active { background: #fff; color: #000; }
+
+    /* TikTok Feed */
+    .tiktok-feed {
+      height: 100vh;
+      overflow-y: scroll;
+      scroll-snap-type: y mandatory;
+      position: relative;
+      z-index: 1;
+    }
+    .feed-card {
+      height: 100vh; scroll-snap-align: start; display: flex;
+      justify-content: center; align-items: center; position: relative; background: transparent;
+      padding: 70px 80px 20px 20px;
+    }
+
+    .iframe-wrapper {
+      width: 100%; max-width: 920px; height: 88vh; border-radius: 16px;
+      overflow: hidden; border: 1px solid rgba(255, 255, 255, 0.12); background: #141416;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.85); display: flex; justify-content: center; align-items: center;
+      position: relative;
+    }
+    .iframe-wrapper.video-mode-width { max-width: 420px; }
+
+    /* Container PDF */
+    .pdf-container {
+      width: 100%;
+      height: 100%;
+      overflow-y: auto !important;
+      overflow-x: hidden;
+      overscroll-behavior: contain;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 24px;
+      position: relative;
+      background: #1c1c1f;
+    }
+
+    /* Placeholder PDF Page */
+    .pdf-page-wrapper {
+      position: relative;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+      border-radius: 6px;
+      background-color: #262629;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      color: #666;
+      font-size: 13px;
+      flex-shrink: 0;
+      transition: box-shadow 0.3s ease;
+    }
+    .pdf-page-wrapper:hover {
+      box-shadow: 0 10px 32px rgba(37, 244, 238, 0.12);
+    }
+
+    .pdf-page-wrapper canvas {
+      display: block;
+      position: absolute;
+      top: 0;
+      left: 0;
+      border-radius: 6px;
+    }
+
+    .textLayer {
+      position: absolute;
+      left: 0;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      overflow: hidden;
+      opacity: 0.25;
+      line-height: 1.0;
+      pointer-events: auto;
+    }
+
+    .textLayer ::selection {
+      background: rgba(37, 244, 238, 0.45);
+      color: transparent;
+    }
+
+    /* Sidebar */
+    .sidebar { position: absolute; right: 20px; bottom: 80px; display: flex; flex-direction: column; gap: 18px; align-items: center; }
+    .side-btn {
+      background: rgba(255, 255, 255, 0.12); border: none; width: 48px; height: 48px;
+      border-radius: 50%; color: #fff; font-size: 20px; cursor: pointer; backdrop-filter: blur(8px);
+      transition: transform 0.2s, background 0.2s;
+    }
+    .side-btn:hover { transform: scale(1.12); background: rgba(254, 44, 85, 0.85); }
+
+    .music-disc {
+      width: 48px; height: 48px; border-radius: 50%;
+      background: radial-gradient(circle, #fe2c55 20%, #111 60%, #25f4ee 100%);
+      border: 2px solid rgba(255,255,255,0.6);
+      display: flex; justify-content: center; align-items: center;
+      animation: spinDisc 3s linear infinite;
+      box-shadow: 0 0 12px rgba(37, 244, 238, 0.4);
+    }
+    @keyframes spinDisc { 100% { transform: rotate(360deg); } }
+
+    .sound-wave { display: flex; gap: 3px; align-items: flex-end; height: 16px; }
+    .sound-bar { width: 3px; background: #25f4ee; animation: wave 0.8s ease-in-out infinite alternate; }
+    .sound-bar:nth-child(2) { animation-delay: 0.2s; background: #fe2c55; }
+    .sound-bar:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes wave { 0% { height: 4px; } 100% { height: 16px; } }
+
+    .floating-heart {
+      position: absolute; color: #fe2c55; font-size: 30px; pointer-events: none;
+      animation: heartPop 0.8s ease-out forwards; z-index: 300;
+    }
+    @keyframes heartPop {
+      0% { transform: scale(0.3) translateY(0); opacity: 1; }
+      50% { transform: scale(1.3) translateY(-30px); opacity: 0.9; }
+      100% { transform: scale(1) translateY(-60px); opacity: 0; }
+    }
+
+    /* Chibi Companion */
+    .chibi-container {
+      position: fixed; top: 75px; right: 15px; z-index: 250;
+      display: flex; flex-direction: column; align-items: center; pointer-events: none;
+    }
+    .chibi-avatar-wrapper {
+      width: 80px; height: 80px; border-radius: 50%;
+      border: 2px solid rgba(255, 255, 255, 0.35); background: rgba(20, 20, 24, 0.7);
+      backdrop-filter: blur(6px); box-shadow: 0 0 16px rgba(37, 244, 238, 0.35);
+      overflow: hidden; display: flex; justify-content: center; align-items: center;
+      animation: chibiFloat 2.5s ease-in-out infinite alternate;
+    }
+    .chibi-img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+    @keyframes chibiFloat {
+      0% { transform: translateY(0); }
+      100% { transform: translateY(-6px); }
+    }
+    .chibi-react-pop {
+      position: absolute; top: 15px; right: 65px; font-size: 28px;
+      animation: reactFloatFade 2.2s ease-out forwards; pointer-events: none;
+    }
+    @keyframes reactFloatFade {
+      0% { opacity: 0; transform: scale(0.2) translate(0, 0); }
+      20% { opacity: 1; transform: scale(1.2) translate(-15px, 8px); }
+      40% { transform: scale(1) translate(-35px, 20px); }
+      100% { opacity: 0; transform: scale(0.8) translate(-65px, 50px); }
+    }
+
+    #file-input { display: none; }
+  </style>
+</head>
+<body>
+
+  <!-- Canvas hiển thị Thước đọc tập trung & Highlight -->
+  <canvas id="reading-guide-canvas"></canvas>
+
+  <div class="top-bar">
+    <div class="mode-switch">
+      <button class="mode-btn active" id="btn-mode-doc" onclick="setGlobalMode('doc')">📖 Chế Độ Đọc</button>
+      <button class="mode-btn" id="btn-mode-video" onclick="setGlobalMode('video')">🎥 Chế Độ Video</button>
+    </div>
+
+    <div class="study-timer" id="timer-display">⏱️ 00:00:00</div>
+
+    <div class="controls">
+      <input type="text" id="url-input" class="input-url" placeholder="Dán link YouTube...">
+      <button class="btn" onclick="addUrlLesson()">+ Thêm Link</button>
+      <label class="btn" for="file-input" style="background:#25f4ee; color:#000;">+ File Local</label>
+      <input type="file" id="file-input" multiple accept="video/*,.pdf,.txt,.html">
+    </div>
+  </div>
+
+  <div class="tiktok-feed" id="feed" onclick="spawnHeart(event)">
+    <div class="feed-card">
+      <div class="iframe-wrapper mode-doc-view">
+        <div class="pdf-container">
+          <div style="color:#aaa; text-align:center; margin-top:50px;">
+            <h3>📖 Chế Độ Đọc Focus Thông Minh</h3>
+            <p style="margin-top:10px; font-size:14px; color:#888;">Tải tài liệu PDF lên bằng nút [+ File Local]. Di chuột qua các dòng chữ để trải nghiệm thước dẫn hướng đọc êm mắt và tập trung.</p>
+          </div>
+        </div>
+      </div>
+      <div class="iframe-wrapper video-mode-width mode-video-view" style="display: none;">
+        <iframe src="https://www.youtube.com/embed/jfKfPfyJRdk" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen style="width:100%;height:100%;border:none;"></iframe>
+      </div>
+      <div class="sidebar">
+        <button class="side-btn">❤️</button>
+        <button class="side-btn">🔖</button>
+        <div class="music-disc">
+          <div class="sound-wave">
+            <div class="sound-bar"></div>
+            <div class="sound-bar"></div>
+            <div class="sound-bar"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="chibi-container">
+    <div class="chibi-avatar-wrapper">
+      <img src="./interactive-character/chibi.png" alt="Chibi" class="chibi-img" onerror="this.src='https://api.iconify.design/noto-v1:girl.svg'">
+    </div>
+  </div>
+
+  <script>
+    if (window.pdfjsLib) {
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    }
+
+    /* ==========================================================================
+       HỆ THỐNG HIỆU ỨNG CHUỘT: THƯỚC ĐỌC VÀ HIGHLIGHT TẬP TRUNG (READING FOCUS)
+       ========================================================================== */
+    const rCanvas = document.getElementById('reading-guide-canvas');
+    const rCtx = rCanvas.getContext('2d');
+
+    function resizeFocusCanvas() {
+      rCanvas.width = window.innerWidth;
+      rCanvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resizeFocusCanvas);
+    resizeFocusCanvas();
+
+    let targetMouse = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+    let smoothPos = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+    let isMouseInside = false;
+    let pulseScale = 1;
+    let pulseDirection = 1;
+
+    window.addEventListener('mousemove', (e) => {
+      targetMouse.x = e.clientX;
+      targetMouse.y = e.clientY;
+      isMouseInside = true;
+    }, { passive: true });
+
+    document.addEventListener('mouseleave', () => {
+      isMouseInside = false;
+    });
+
+    function drawReadingAssistant() {
+      rCtx.clearRect(0, 0, rCanvas.width, rCanvas.height);
+
+      if (isMouseInside) {
+        // Thuật toán nội suy tuyến tính (Lerp) tạo độ lướt mượt mà bám theo dòng chữ
+        smoothPos.x += (targetMouse.x - smoothPos.x) * 0.18;
+        smoothPos.y += (targetMouse.y - smoothPos.y) * 0.18;
+
+        const x = smoothPos.x;
+        const y = smoothPos.y;
+
+        // Nhịp thở nhẹ của tâm điểm đọc
+        pulseScale += 0.008 * pulseDirection;
+        if (pulseScale > 1.15) pulseDirection = -1;
+        if (pulseScale < 0.9) pulseDirection = 1;
+
+        // 1. THƯỚC DẪN DÒNG (Reading Ruler Band)
+        // Chiều cao 24px mô phỏng chuẩn chiều cao của 1 dòng chữ, chiều dài dạt ra 2 bên
+        const rulerWidth = 520;
+        const rulerHeight = 26;
+        const rulerLeft = x - rulerWidth / 2;
+        const rulerTop = y - rulerHeight / 2;
+
+        const lineGrad = rCtx.createLinearGradient(rulerLeft, y, rulerLeft + rulerWidth, y);
+        lineGrad.addColorStop(0, 'rgba(37, 244, 238, 0)');
+        lineGrad.addColorStop(0.2, 'rgba(37, 244, 238, 0.12)');
+        lineGrad.addColorStop(0.5, 'rgba(255, 230, 100, 0.28)'); // Vàng highlight nhẹ ở trung tâm
+        lineGrad.addColorStop(0.8, 'rgba(37, 244, 238, 0.12)');
+        lineGrad.addColorStop(1, 'rgba(37, 244, 238, 0)');
+
+        rCtx.fillStyle = lineGrad;
+        if (rCtx.roundRect) {
+          rCtx.beginPath();
+          rCtx.roundRect(rulerLeft, rulerTop, rulerWidth, rulerHeight, 13);
+          rCtx.fill();
+        } else {
+          rCtx.fillRect(rulerLeft, rulerTop, rulerWidth, rulerHeight);
+        }
+
+        // 2. VÙNG SÁNG TẬP TRUNG (Focal Spotlight)
+        // Kéo sự chú ý vào đúng 2-3 chữ ngay dưới con trỏ
+        const spotRadius = 75;
+        const spotGrad = rCtx.createRadialGradient(x, y, 0, x, y, spotRadius);
+        spotGrad.addColorStop(0, 'rgba(255, 255, 255, 0.45)');
+        spotGrad.addColorStop(0.35, 'rgba(37, 244, 238, 0.20)');
+        spotGrad.addColorStop(1, 'rgba(37, 244, 238, 0)');
+
+        rCtx.fillStyle = spotGrad;
+        rCtx.beginPath();
+        rCtx.arc(x, y, spotRadius, 0, Math.PI * 2);
+        rCtx.fill();
+
+        // 3. ĐIỂM CHỈ DẪN TINH TẾ (Precision Pointer Dot)
+        // Chấm tròn nhỏ chỉ định vị trí đang đọc
+        rCtx.beginPath();
+        rCtx.arc(x, y, 3 * pulseScale, 0, Math.PI * 2);
+        rCtx.fillStyle = '#25f4ee';
+        rCtx.shadowColor = 'rgba(37, 244, 238, 0.8)';
+        rCtx.shadowBlur = 6;
+        rCtx.fill();
+        rCtx.shadowBlur = 0; // Reset shadow
+      }
+
+      requestAnimationFrame(drawReadingAssistant);
+    }
+    requestAnimationFrame(drawReadingAssistant);
+
+    /* ==========================================================================
+       HỆ THỐNG LAZY RENDERING & QUẢN LÝ BỘ NHỚ RAM CHO PDF
+       ========================================================================== */
+    async function renderPdfToContainer(pdfArrayBuffer, container) {
+      container.innerHTML = '<div style="color:#aaa; text-align:center; padding: 40px;">⌛ Đang tính toán kích thước tài liệu...</div>';
+      
+      try {
+        const dataBytes = new Uint8Array(pdfArrayBuffer);
+        const loadingTask = pdfjsLib.getDocument({
+          data: dataBytes,
+          cMapUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/cmaps/',
+          cMapPacked: true
+        });
+
+        const pdf = await loadingTask.promise;
+        container.innerHTML = '';
+
+        const firstPage = await pdf.getPage(1);
+        const unscaledViewport = firstPage.getViewport({ scale: 1.0 });
+        const containerWidth = container.clientWidth > 100 ? (container.clientWidth - 48) : 800;
+        const fitScale = containerWidth / unscaledViewport.width;
+        const scale = Math.min(Math.max(fitScale, 0.75), 1.4);
+        const pageViewport = firstPage.getViewport({ scale: scale });
+        firstPage.cleanup();
+
+        const pageRenderTasks = new Map();
+
+        for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+          const wrapper = document.createElement('div');
+          wrapper.className = 'pdf-page-wrapper';
+          wrapper.dataset.pageNum = pageNum;
+          wrapper.style.width = `${Math.floor(pageViewport.width)}px`;
+          wrapper.style.height = `${Math.floor(pageViewport.height)}px`;
+          wrapper.innerHTML = `<span>Trang ${pageNum}</span>`;
+          container.appendChild(wrapper);
+        }
+
+        const observer = new IntersectionObserver((entries) => {
+          entries.forEach(entry => {
+            const wrapper = entry.target;
+            const pageNum = parseInt(wrapper.dataset.pageNum, 10);
+
+            if (entry.isIntersecting) {
+              if (!pageRenderTasks.has(pageNum)) {
+                loadAndRenderPage(pdf, pageNum, wrapper, scale, pageRenderTasks);
+              }
+            } else {
+              if (pageRenderTasks.has(pageNum)) {
+                destroyPage(wrapper, pageNum, pageRenderTasks);
+              }
+            }
+          });
+        }, {
+          root: container,
+          rootMargin: '250px 0px 250px 0px',
+          threshold: 0.01
+        });
+
+        container.querySelectorAll('.pdf-page-wrapper').forEach(el => observer.observe(el));
+
+      } catch (err) {
+        console.error("Lỗi nạp PDF:", err);
+        container.innerHTML = `<div style="color:#fe2c55; text-align:center; padding: 40px;">
+          ❌ Lỗi đọc PDF: ${err.message || 'Không thể hiển thị tài liệu này.'}
+        </div>`;
+      }
+    }
+
+    async function loadAndRenderPage(pdf, pageNum, wrapper, scale, pageRenderTasks) {
+      try {
+        const page = await pdf.getPage(pageNum);
+        const viewport = page.getViewport({ scale: scale });
+
+        wrapper.innerHTML = '';
+        wrapper.style.backgroundColor = '#ffffff';
+
+        const pdfCanvas = document.createElement('canvas');
+        const pdfCtx = pdfCanvas.getContext('2d', { alpha: false });
+
+        const outputScale = Math.min(window.devicePixelRatio || 1, 1.25);
+        pdfCanvas.width = Math.floor(viewport.width * outputScale);
+        pdfCanvas.height = Math.floor(viewport.height * outputScale);
+        pdfCanvas.style.width = `${viewport.width}px`;
+        pdfCanvas.style.height = `${viewport.height}px`;
+
+        const transform = outputScale !== 1 ? [outputScale, 0, 0, outputScale, 0, 0] : null;
+        wrapper.appendChild(pdfCanvas);
+
+        const textLayerDiv = document.createElement('div');
+        textLayerDiv.className = 'textLayer';
+        textLayerDiv.style.width = `${viewport.width}px`;
+        textLayerDiv.style.height = `${viewport.height}px`;
+        textLayerDiv.style.setProperty('--scale-factor', viewport.scale);
+        wrapper.appendChild(textLayerDiv);
+
+        const renderTask = page.render({
+          canvasContext: pdfCtx,
+          transform: transform,
+          viewport: viewport
+        });
+
+        pageRenderTasks.set(pageNum, { renderTask, page, canvas: pdfCanvas });
+
+        await renderTask.promise;
+
+        try {
+          const textContent = await page.getTextContent();
+          if (typeof pdfjsLib.renderTextLayer === 'function') {
+            const textLayerTask = pdfjsLib.renderTextLayer({
+              textContentSource: textContent,
+              container: textLayerDiv,
+              viewport: viewport,
+              textDivs: []
+            });
+            if (textLayerTask && textLayerTask.promise) {
+              await textLayerTask.promise;
+            }
+          }
+        } catch (e) {
+          console.warn(`Lỗi TextLayer trang ${pageNum}:`, e);
+        }
+
+      } catch (err) {
+        if (err.name !== 'RenderingCancelledException') {
+          console.error(`Lỗi render trang ${pageNum}:`, err);
+        }
+      }
+    }
+
+    function destroyPage(wrapper, pageNum, pageRenderTasks) {
+      const taskObj = pageRenderTasks.get(pageNum);
+      if (taskObj) {
+        if (taskObj.renderTask && typeof taskObj.renderTask.cancel === 'function') {
+          try { taskObj.renderTask.cancel(); } catch(e){}
+        }
+        if (taskObj.page && typeof taskObj.page.cleanup === 'function') {
+          taskObj.page.cleanup();
+        }
+        if (taskObj.canvas) {
+          taskObj.canvas.width = 0;
+          taskObj.canvas.height = 0;
+        }
+        pageRenderTasks.delete(pageNum);
+      }
+
+      wrapper.innerHTML = `<span>Trang ${pageNum}</span>`;
+      wrapper.style.backgroundColor = '#262629';
+    }
+
+    /* BỘ ĐẾM GIỜ & CHIBI REACT */
+    let secondsElapsed = 0;
+    setInterval(() => {
+      secondsElapsed++;
+      const hrs = String(Math.floor(secondsElapsed / 3600)).padStart(2, '0');
+      const mins = String(Math.floor((secondsElapsed % 3600) / 60)).padStart(2, '0');
+      const secs = String(secondsElapsed % 60).padStart(2, '0');
+      document.getElementById('timer-display').innerText = `⏱️ ${hrs}:${mins}:${secs}`;
+    }, 1000);
+
+    const reactIcons = ['🔥', '✨', '👏', '💡', '❤️', '💯', '🚀', '⭐', '📚'];
+    setInterval(() => {
+      const container = document.querySelector('.chibi-container');
+      const pop = document.createElement('div');
+      pop.className = 'chibi-react-pop';
+      pop.innerText = reactIcons[Math.floor(Math.random() * reactIcons.length)];
+      container.appendChild(pop);
+      setTimeout(() => pop.remove(), 2200);
+    }, 1500);
+
+    /* LOGIC MODE & TẠO CARD */
+    let currentMode = 'doc';
+    function setGlobalMode(mode) {
+      currentMode = mode;
+      document.getElementById('btn-mode-doc').classList.toggle('active', mode === 'doc');
+      document.getElementById('btn-mode-video').classList.toggle('active', mode === 'video');
+
+      document.querySelectorAll('.mode-doc-view').forEach(el => el.style.display = mode === 'doc' ? 'flex' : 'none');
+      document.querySelectorAll('.mode-video-view').forEach(el => el.style.display = mode === 'video' ? 'flex' : 'none');
+    }
+
+    function extractYouTubeId(url) {
+      const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|shorts\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+      const match = url.match(regExp);
+      return (match && match[2].length === 11) ? match[2] : null;
+    }
+
+    function addUrlLesson() {
+      const urlInput = document.getElementById('url-input');
+      const url = urlInput.value.trim();
+      if (!url) return;
+
+      const videoId = extractYouTubeId(url);
+      createIframeCard({ videoId: videoId, webUrl: !videoId ? url : null });
+      urlInput.value = '';
+    }
+
+    document.getElementById('file-input').addEventListener('change', (e) => {
+      Array.from(e.target.files).forEach(file => {
+        if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+          const reader = new FileReader();
+          reader.onload = function() {
+            createIframeCard({ pdfBuffer: this.result });
+          };
+          reader.readAsArrayBuffer(file);
+        } else if (file.type.startsWith('video/')) {
+          createIframeCard({ localVideoUrl: URL.createObjectURL(file) });
+        } else {
+          createIframeCard({ docUrl: URL.createObjectURL(file) });
+        }
+      });
+      e.target.value = '';
+    });
+
+    function createIframeCard({ videoId, localVideoUrl, pdfBuffer, docUrl, webUrl }) {
+      const feed = document.getElementById('feed');
+      const card = document.createElement('div');
+      card.className = 'feed-card';
+
+      const pdfContainerId = `pdf-container-${Date.now()}-${Math.floor(Math.random()*1000)}`;
+
+      card.innerHTML = `
+        <div class="iframe-wrapper mode-doc-view" style="display: ${currentMode === 'doc' ? 'flex' : 'none'};">
+          <div class="pdf-container" id="${pdfContainerId}">
+            ${docUrl ? `<iframe src="${docUrl}" style="width:100%;height:100%;border:none;"></iframe>` : ''}
+          </div>
+        </div>
+        <div class="iframe-wrapper video-mode-width mode-video-view" style="display: ${currentMode === 'video' ? 'flex' : 'none'};">
+          ${videoId ? `<iframe src="https://www.youtube.com/embed/${videoId}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen style="width:100%;height:100%;border:none;"></iframe>` : ''}
+          ${localVideoUrl ? `<video src="${localVideoUrl}" controls loop style="width:100%;height:100%;object-fit:cover;"></video>` : ''}
+          ${webUrl ? `<iframe src="${webUrl}" style="width:100%;height:100%;border:none;"></iframe>` : ''}
+        </div>
+        <div class="sidebar">
+          <button class="side-btn">❤️</button>
+          <button class="side-btn">🔖</button>
+          <div class="music-disc">
+            <div class="sound-wave">
+              <div class="sound-bar"></div>
+              <div class="sound-bar"></div>
+              <div class="sound-bar"></div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      feed.appendChild(card);
+      card.scrollIntoView({ behavior: 'smooth' });
+
+      if (pdfBuffer) {
+        const container = document.getElementById(pdfContainerId);
+        renderPdfToContainer(pdfBuffer, container);
+      }
+    }
+
+    function spawnHeart(e) {
+      if (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT') return;
+      const heart = document.createElement('div');
+      heart.className = 'floating-heart';
+      heart.innerText = '❤️';
+      heart.style.left = `${e.clientX - 15}px`;
+      heart.style.top = `${e.clientY - 15}px`;
+      document.body.appendChild(heart);
+      setTimeout(() => heart.remove(), 800);
+    }
+  </script>
+</body>
+</html>
