@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>TikTok Study - Smart Reading Focus Effect</title>
+  <title>TikTok Study - Smart Reading Focus Effect & Zoom</title>
 
   <!-- Thư viện PDF.js và Worker -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -29,7 +29,7 @@
       height: 100vh;
       pointer-events: none;
       z-index: 9999;
-      mix-blend-mode: multiply; /* Hòa trộn để làm nổi chữ tự nhiên */
+      mix-blend-mode: multiply;
     }
 
     /* Ambient Glow Nền */
@@ -108,45 +108,125 @@
     }
 
     .iframe-wrapper {
-      width: 100%; max-width: 920px; height: 88vh; border-radius: 16px;
+      width: 100%; max-width: 960px; height: 88vh; border-radius: 16px;
       overflow: hidden; border: 1px solid rgba(255, 255, 255, 0.12); background: #141416;
       box-shadow: 0 12px 40px rgba(0,0,0,0.85); display: flex; justify-content: center; align-items: center;
       position: relative;
     }
     .iframe-wrapper.video-mode-width { max-width: 420px; }
 
-    /* Container PDF */
+    /* PDF Wrapper & Zoom Bar */
+    .pdf-viewer-outer {
+      width: 100%;
+      height: 100%;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      background: #18181c;
+    }
+
+    /* Thanh công cụ Zoom nổi */
+    .pdf-floating-toolbar {
+      position: absolute;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(22, 22, 26, 0.88);
+      backdrop-filter: blur(14px);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      border-radius: 30px;
+      padding: 6px 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      z-index: 60;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.7);
+      user-select: none;
+      transition: opacity 0.25s ease, transform 0.25s ease;
+    }
+    .pdf-floating-toolbar:hover {
+      background: rgba(26, 26, 32, 0.96);
+      box-shadow: 0 12px 36px rgba(37, 244, 238, 0.2);
+    }
+    .zoom-btn {
+      background: rgba(255, 255, 255, 0.1);
+      color: #fff;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      cursor: pointer;
+      font-weight: bold;
+      font-size: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s ease;
+    }
+    .zoom-btn:hover {
+      background: #25f4ee;
+      color: #000;
+      border-color: #25f4ee;
+      transform: scale(1.08);
+    }
+    .zoom-btn-action {
+      background: rgba(255, 255, 255, 0.08);
+      color: #ddd;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      padding: 4px 10px;
+      border-radius: 14px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      transition: all 0.15s ease;
+    }
+    .zoom-btn-action:hover {
+      background: #fe2c55;
+      color: #fff;
+      border-color: #fe2c55;
+    }
+    .zoom-text {
+      font-family: monospace;
+      font-size: 13px;
+      font-weight: bold;
+      min-width: 52px;
+      text-align: center;
+      color: #25f4ee;
+    }
+
+    /* Container PDF Scrollable */
     .pdf-container {
       width: 100%;
       height: 100%;
       overflow-y: auto !important;
-      overflow-x: hidden;
+      overflow-x: auto !important;
       overscroll-behavior: contain;
-      padding: 24px;
+      padding: 30px 20px 80px 20px;
       display: flex;
       flex-direction: column;
-      align-items: center;
-      gap: 24px;
+      align-items: safe center;
+      gap: 28px;
       position: relative;
-      background: #1c1c1f;
+      background: #141416;
     }
 
     /* Placeholder PDF Page */
     .pdf-page-wrapper {
       position: relative;
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.55);
       border-radius: 6px;
-      background-color: #262629;
+      background-color: #222226;
       display: flex;
       justify-content: center;
       align-items: center;
-      color: #666;
+      color: #777;
       font-size: 13px;
       flex-shrink: 0;
-      transition: box-shadow 0.3s ease;
+      margin: 0 auto;
+      transition: box-shadow 0.25s ease;
     }
     .pdf-page-wrapper:hover {
-      box-shadow: 0 10px 32px rgba(37, 244, 238, 0.12);
+      box-shadow: 0 10px 36px rgba(37, 244, 238, 0.15);
     }
 
     .pdf-page-wrapper canvas {
@@ -256,7 +336,7 @@
     <div class="controls">
       <input type="text" id="url-input" class="input-url" placeholder="Dán link YouTube...">
       <button class="btn" onclick="addUrlLesson()">+ Thêm Link</button>
-      <label class="btn" for="file-input" style="background:#25f4ee; color:#000;">+ File Local</label>
+      <label class="btn" for="file-input" style="background:#25f4ee; color:#000;">+ File Local (PDF/Video)</label>
       <input type="file" id="file-input" multiple accept="video/*,.pdf,.txt,.html">
     </div>
   </div>
@@ -265,9 +345,17 @@
     <div class="feed-card">
       <div class="iframe-wrapper mode-doc-view">
         <div class="pdf-container">
-          <div style="color:#aaa; text-align:center; margin-top:50px;">
-            <h3>📖 Chế Độ Đọc Focus Thông Minh</h3>
-            <p style="margin-top:10px; font-size:14px; color:#888;">Tải tài liệu PDF lên bằng nút [+ File Local]. Di chuột qua các dòng chữ để trải nghiệm thước dẫn hướng đọc êm mắt và tập trung.</p>
+          <div style="color:#aaa; text-align:center; margin-top:80px; max-width:550px; line-height: 1.6;">
+            <h2 style="color:#25f4ee; margin-bottom:12px;">📖 Chế Độ Đọc Focus & Phóng To Thông Minh</h2>
+            <p style="font-size:14px; color:#bbb;">
+              Nhấp vào nút <b style="color:#fff;">[+ File Local]</b> phía trên để tải file PDF của bạn.
+            </p>
+            <div style="margin-top:20px; padding:15px; background:rgba(255,255,255,0.05); border-radius:12px; font-size:13px; text-align:left; color:#ccc;">
+              ✨ <b>Tính năng mới đã kích hoạt:</b><br>
+              • <b>Phóng to / Thu nhỏ:</b> Dùng thanh công cụ nổi hoặc phím tắt <kbd style="background:#333; padding:2px 6px; border-radius:4px;">Ctrl</kbd> + <kbd style="background:#333; padding:2px 6px; border-radius:4px;">Lăn chuột</kbd>.<br>
+              • <b>Độ nét cao:</b> Tự động re-render rõ từng chữ ở mọi mức zoom (lên tới 300%).<br>
+              • <b>Thước dẫn dòng tự nhiên:</b> Lướt chuột để spotlight dòng bạn đang đọc.
+            </div>
           </div>
         </div>
       </div>
@@ -300,7 +388,7 @@
     }
 
     /* ==========================================================================
-       HỆ THỐNG HIỆU ỨNG CHUỘT: THƯỚC ĐỌC VÀ HIGHLIGHT TẬP TRUNG (READING FOCUS)
+       1. HỆ THỐNG HIỆU ỨNG CHUỘT: THƯỚC ĐỌC VÀ HIGHLIGHT FOCUS
        ========================================================================== */
     const rCanvas = document.getElementById('reading-guide-canvas');
     const rCtx = rCanvas.getContext('2d');
@@ -332,21 +420,18 @@
       rCtx.clearRect(0, 0, rCanvas.width, rCanvas.height);
 
       if (isMouseInside) {
-        // Thuật toán nội suy tuyến tính (Lerp) tạo độ lướt mượt mà bám theo dòng chữ
         smoothPos.x += (targetMouse.x - smoothPos.x) * 0.18;
         smoothPos.y += (targetMouse.y - smoothPos.y) * 0.18;
 
         const x = smoothPos.x;
         const y = smoothPos.y;
 
-        // Nhịp thở nhẹ của tâm điểm đọc
         pulseScale += 0.008 * pulseDirection;
         if (pulseScale > 1.15) pulseDirection = -1;
         if (pulseScale < 0.9) pulseDirection = 1;
 
-        // 1. THƯỚC DẪN DÒNG (Reading Ruler Band)
-        // Chiều cao 24px mô phỏng chuẩn chiều cao của 1 dòng chữ, chiều dài dạt ra 2 bên
-        const rulerWidth = 520;
+        // Thước đọc dòng ngang
+        const rulerWidth = 540;
         const rulerHeight = 26;
         const rulerLeft = x - rulerWidth / 2;
         const rulerTop = y - rulerHeight / 2;
@@ -354,7 +439,7 @@
         const lineGrad = rCtx.createLinearGradient(rulerLeft, y, rulerLeft + rulerWidth, y);
         lineGrad.addColorStop(0, 'rgba(37, 244, 238, 0)');
         lineGrad.addColorStop(0.2, 'rgba(37, 244, 238, 0.12)');
-        lineGrad.addColorStop(0.5, 'rgba(255, 230, 100, 0.28)'); // Vàng highlight nhẹ ở trung tâm
+        lineGrad.addColorStop(0.5, 'rgba(255, 230, 100, 0.28)');
         lineGrad.addColorStop(0.8, 'rgba(37, 244, 238, 0.12)');
         lineGrad.addColorStop(1, 'rgba(37, 244, 238, 0)');
 
@@ -367,8 +452,7 @@
           rCtx.fillRect(rulerLeft, rulerTop, rulerWidth, rulerHeight);
         }
 
-        // 2. VÙNG SÁNG TẬP TRUNG (Focal Spotlight)
-        // Kéo sự chú ý vào đúng 2-3 chữ ngay dưới con trỏ
+        // Spotlight tập trung chữ
         const spotRadius = 75;
         const spotGrad = rCtx.createRadialGradient(x, y, 0, x, y, spotRadius);
         spotGrad.addColorStop(0, 'rgba(255, 255, 255, 0.45)');
@@ -380,15 +464,14 @@
         rCtx.arc(x, y, spotRadius, 0, Math.PI * 2);
         rCtx.fill();
 
-        // 3. ĐIỂM CHỈ DẪN TINH TẾ (Precision Pointer Dot)
-        // Chấm tròn nhỏ chỉ định vị trí đang đọc
+        // Chấm laser dẫn dòng
         rCtx.beginPath();
         rCtx.arc(x, y, 3 * pulseScale, 0, Math.PI * 2);
         rCtx.fillStyle = '#25f4ee';
         rCtx.shadowColor = 'rgba(37, 244, 238, 0.8)';
         rCtx.shadowBlur = 6;
         rCtx.fill();
-        rCtx.shadowBlur = 0; // Reset shadow
+        rCtx.shadowBlur = 0;
       }
 
       requestAnimationFrame(drawReadingAssistant);
@@ -396,11 +479,18 @@
     requestAnimationFrame(drawReadingAssistant);
 
     /* ==========================================================================
-       HỆ THỐNG LAZY RENDERING & QUẢN LÝ BỘ NHỚ RAM CHO PDF
+       2. HỆ THỐNG QUẢN LÝ ZOOM & RENDER PDF TẬP TRUNG (SMART LAZY RENDER)
        ========================================================================== */
-    async function renderPdfToContainer(pdfArrayBuffer, container) {
-      container.innerHTML = '<div style="color:#aaa; text-align:center; padding: 40px;">⌛ Đang tính toán kích thước tài liệu...</div>';
-      
+    async function renderPdfToContainer(pdfArrayBuffer, outerWrapper) {
+      const container = outerWrapper.querySelector('.pdf-container');
+      const zoomText = outerWrapper.querySelector('.zoom-text');
+      const btnZoomIn = outerWrapper.querySelector('.btn-zoom-in');
+      const btnZoomOut = outerWrapper.querySelector('.btn-zoom-out');
+      const btnZoomFit = outerWrapper.querySelector('.btn-zoom-fit');
+      const btnZoomReset = outerWrapper.querySelector('.btn-zoom-reset');
+
+      container.innerHTML = '<div style="color:#aaa; text-align:center; padding: 40px;">⌛ Đang chuẩn bị tài liệu và tối ưu hiển thị...</div>';
+
       try {
         const dataBytes = new Uint8Array(pdfArrayBuffer);
         const loadingTask = pdfjsLib.getDocument({
@@ -412,48 +502,107 @@
         const pdf = await loadingTask.promise;
         container.innerHTML = '';
 
+        // Trích xuất viewport gốc từ trang 1 để đo kích thước nền tảng
         const firstPage = await pdf.getPage(1);
-        const unscaledViewport = firstPage.getViewport({ scale: 1.0 });
-        const containerWidth = container.clientWidth > 100 ? (container.clientWidth - 48) : 800;
-        const fitScale = containerWidth / unscaledViewport.width;
-        const scale = Math.min(Math.max(fitScale, 0.75), 1.4);
-        const pageViewport = firstPage.getViewport({ scale: scale });
+        const baseViewport = firstPage.getViewport({ scale: 1.0 });
         firstPage.cleanup();
 
-        const pageRenderTasks = new Map();
+        // Tính tỉ lệ ban đầu để vừa vặn khung
+        const containerWidth = container.clientWidth > 100 ? (container.clientWidth - 50) : 800;
+        let currentScale = Math.min(Math.max(containerWidth / baseViewport.width, 0.7), 1.25);
 
+        // Đối tượng quản lý trạng thái tài liệu
+        const pdfState = {
+          pdf: pdf,
+          baseViewport: baseViewport,
+          scale: currentScale,
+          container: container,
+          zoomText: zoomText,
+          pageRenderTasks: new Map(),
+          pageWrappers: new Map(),
+          observer: null
+        };
+
+        // Tạo khung placeholder cho tất cả các trang
         for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
           const wrapper = document.createElement('div');
           wrapper.className = 'pdf-page-wrapper';
           wrapper.dataset.pageNum = pageNum;
-          wrapper.style.width = `${Math.floor(pageViewport.width)}px`;
-          wrapper.style.height = `${Math.floor(pageViewport.height)}px`;
+          wrapper.style.width = `${Math.floor(baseViewport.width * currentScale)}px`;
+          wrapper.style.height = `${Math.floor(baseViewport.height * currentScale)}px`;
           wrapper.innerHTML = `<span>Trang ${pageNum}</span>`;
           container.appendChild(wrapper);
+          pdfState.pageWrappers.set(pageNum, wrapper);
         }
 
-        const observer = new IntersectionObserver((entries) => {
+        // Tạo IntersectionObserver để Lazy load từng trang khi cuộn tới
+        pdfState.observer = new IntersectionObserver((entries) => {
           entries.forEach(entry => {
             const wrapper = entry.target;
             const pageNum = parseInt(wrapper.dataset.pageNum, 10);
 
             if (entry.isIntersecting) {
-              if (!pageRenderTasks.has(pageNum)) {
-                loadAndRenderPage(pdf, pageNum, wrapper, scale, pageRenderTasks);
+              if (!pdfState.pageRenderTasks.has(pageNum)) {
+                loadAndRenderPage(pdfState, pageNum, wrapper);
               }
             } else {
-              if (pageRenderTasks.has(pageNum)) {
-                destroyPage(wrapper, pageNum, pageRenderTasks);
+              if (pdfState.pageRenderTasks.has(pageNum)) {
+                destroyPage(wrapper, pageNum, pdfState.pageRenderTasks);
               }
             }
           });
         }, {
           root: container,
-          rootMargin: '250px 0px 250px 0px',
+          rootMargin: '300px 0px 300px 0px',
           threshold: 0.01
         });
 
-        container.querySelectorAll('.pdf-page-wrapper').forEach(el => observer.observe(el));
+        pdfState.pageWrappers.forEach(el => pdfState.observer.observe(el));
+
+        // Hàm cập nhật tỉ lệ Zoom
+        function setZoom(newScale) {
+          // Giới hạn zoom từ 40% đến 300%
+          newScale = Math.min(Math.max(newScale, 0.4), 3.0);
+          pdfState.scale = newScale;
+          zoomText.innerText = `${Math.round(newScale * 100)}%`;
+
+          // Cập nhật kích thước vật lý của tất cả các trang
+          pdfState.pageWrappers.forEach((wrapper) => {
+            wrapper.style.width = `${Math.floor(baseViewport.width * newScale)}px`;
+            wrapper.style.height = `${Math.floor(baseViewport.height * newScale)}px`;
+          });
+
+          // Hủy các trang đang vẽ cũ để vẽ lại theo độ phân giải mới sắc nét
+          pdfState.pageRenderTasks.forEach((taskObj, pageNum) => {
+            destroyPage(taskObj.wrapper, pageNum, pdfState.pageRenderTasks);
+          });
+
+          // Tái kích hoạt observer cho các trang đang nhìn thấy
+          pdfState.observer.disconnect();
+          pdfState.pageWrappers.forEach(wrapper => pdfState.observer.observe(wrapper));
+        }
+
+        // Gán sự kiện cho các nút Zoom
+        if (btnZoomIn) btnZoomIn.onclick = () => setZoom(pdfState.scale + 0.15);
+        if (btnZoomOut) btnZoomOut.onclick = () => setZoom(pdfState.scale - 0.15);
+        if (btnZoomFit) {
+          btnZoomFit.onclick = () => {
+            const fitScale = (container.clientWidth - 50) / baseViewport.width;
+            setZoom(fitScale);
+          };
+        }
+        if (btnZoomReset) btnZoomReset.onclick = () => setZoom(1.0);
+
+        // Hỗ trợ phím tắt Ctrl + Cuộn chuột để Zoom
+        container.addEventListener('wheel', (e) => {
+          if (e.ctrlKey || e.metaKey) {
+            e.preventDefault();
+            const delta = e.deltaY < 0 ? 0.12 : -0.12;
+            setZoom(pdfState.scale + delta);
+          }
+        }, { passive: false });
+
+        setZoom(currentScale);
 
       } catch (err) {
         console.error("Lỗi nạp PDF:", err);
@@ -463,10 +612,10 @@
       }
     }
 
-    async function loadAndRenderPage(pdf, pageNum, wrapper, scale, pageRenderTasks) {
+    async function loadAndRenderPage(pdfState, pageNum, wrapper) {
       try {
-        const page = await pdf.getPage(pageNum);
-        const viewport = page.getViewport({ scale: scale });
+        const page = await pdfState.pdf.getPage(pageNum);
+        const viewport = page.getViewport({ scale: pdfState.scale });
 
         wrapper.innerHTML = '';
         wrapper.style.backgroundColor = '#ffffff';
@@ -474,19 +623,21 @@
         const pdfCanvas = document.createElement('canvas');
         const pdfCtx = pdfCanvas.getContext('2d', { alpha: false });
 
-        const outputScale = Math.min(window.devicePixelRatio || 1, 1.25);
+        // Tối ưu DPI màn hình để chữ luôn sắc nét
+        const outputScale = Math.min(window.devicePixelRatio || 1, 1.5);
         pdfCanvas.width = Math.floor(viewport.width * outputScale);
         pdfCanvas.height = Math.floor(viewport.height * outputScale);
-        pdfCanvas.style.width = `${viewport.width}px`;
-        pdfCanvas.style.height = `${viewport.height}px`;
+        pdfCanvas.style.width = `${Math.floor(viewport.width)}px`;
+        pdfCanvas.style.height = `${Math.floor(viewport.height)}px`;
 
         const transform = outputScale !== 1 ? [outputScale, 0, 0, outputScale, 0, 0] : null;
         wrapper.appendChild(pdfCanvas);
 
+        // Lớp TextLayer để bôi đen và đọc chữ
         const textLayerDiv = document.createElement('div');
         textLayerDiv.className = 'textLayer';
-        textLayerDiv.style.width = `${viewport.width}px`;
-        textLayerDiv.style.height = `${viewport.height}px`;
+        textLayerDiv.style.width = `${Math.floor(viewport.width)}px`;
+        textLayerDiv.style.height = `${Math.floor(viewport.height)}px`;
         textLayerDiv.style.setProperty('--scale-factor', viewport.scale);
         wrapper.appendChild(textLayerDiv);
 
@@ -496,7 +647,7 @@
           viewport: viewport
         });
 
-        pageRenderTasks.set(pageNum, { renderTask, page, canvas: pdfCanvas });
+        pdfState.pageRenderTasks.set(pageNum, { renderTask, page, canvas: pdfCanvas, wrapper });
 
         await renderTask.promise;
 
@@ -541,10 +692,12 @@
       }
 
       wrapper.innerHTML = `<span>Trang ${pageNum}</span>`;
-      wrapper.style.backgroundColor = '#262629';
+      wrapper.style.backgroundColor = '#222226';
     }
 
-    /* BỘ ĐẾM GIỜ & CHIBI REACT */
+    /* ==========================================================================
+       3. BỘ ĐẾM GIỜ & PHẢN ỨNG CỦA NHÂN VẬT CHIBI
+       ========================================================================== */
     let secondsElapsed = 0;
     setInterval(() => {
       secondsElapsed++;
@@ -564,7 +717,9 @@
       setTimeout(() => pop.remove(), 2200);
     }, 1500);
 
-    /* LOGIC MODE & TẠO CARD */
+    /* ==========================================================================
+       4. CHUYỂN MODE & TẠO CARD NỘI DUNG TIKTOK FEED
+       ========================================================================== */
     let currentMode = 'doc';
     function setGlobalMode(mode) {
       currentMode = mode;
@@ -613,12 +768,23 @@
       const card = document.createElement('div');
       card.className = 'feed-card';
 
-      const pdfContainerId = `pdf-container-${Date.now()}-${Math.floor(Math.random()*1000)}`;
+      const cardId = `pdf-wrapper-${Date.now()}-${Math.floor(Math.random()*1000)}`;
 
       card.innerHTML = `
         <div class="iframe-wrapper mode-doc-view" style="display: ${currentMode === 'doc' ? 'flex' : 'none'};">
-          <div class="pdf-container" id="${pdfContainerId}">
-            ${docUrl ? `<iframe src="${docUrl}" style="width:100%;height:100%;border:none;"></iframe>` : ''}
+          <div class="pdf-viewer-outer" id="${cardId}">
+            ${pdfBuffer ? `
+              <div class="pdf-floating-toolbar">
+                <button class="zoom-btn btn-zoom-out" title="Thu nhỏ (Ctrl + Cuộn xuống)">−</button>
+                <span class="zoom-text">100%</span>
+                <button class="zoom-btn btn-zoom-in" title="Phóng to (Ctrl + Cuộn lên)">+</button>
+                <button class="zoom-btn-action btn-zoom-fit" title="Phóng to vừa khung">⤢ Vừa Khung</button>
+                <button class="zoom-btn-action btn-zoom-reset" title="Tỉ lệ chuẩn 100%">1:1</button>
+              </div>
+            ` : ''}
+            <div class="pdf-container">
+              ${docUrl ? `<iframe src="${docUrl}" style="width:100%;height:100%;border:none;"></iframe>` : ''}
+            </div>
           </div>
         </div>
         <div class="iframe-wrapper video-mode-width mode-video-view" style="display: ${currentMode === 'video' ? 'flex' : 'none'};">
@@ -643,13 +809,13 @@
       card.scrollIntoView({ behavior: 'smooth' });
 
       if (pdfBuffer) {
-        const container = document.getElementById(pdfContainerId);
-        renderPdfToContainer(pdfBuffer, container);
+        const outerWrapper = document.getElementById(cardId);
+        renderPdfToContainer(pdfBuffer, outerWrapper);
       }
     }
 
     function spawnHeart(e) {
-      if (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT') return;
+      if (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT' || e.target.closest('.pdf-floating-toolbar')) return;
       const heart = document.createElement('div');
       heart.className = 'floating-heart';
       heart.innerText = '❤️';
