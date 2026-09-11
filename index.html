@@ -75,7 +75,8 @@
 
     .input-url {
       background: rgba(255, 255, 255, 0.08); border: 1px solid #333; color: #fff;
-      padding: 8px 14px; border-radius: 20px; width: 220px; font-size: 13px; outline: none;
+      padding: 8px 14px; border-radius: 20px; width: 250px; font-size: 13px; outline: none;
+      transition: border-color 0.2s;
     }
     .input-url:focus { border-color: #fe2c55; }
     .btn {
@@ -104,7 +105,7 @@
     .feed-card {
       height: 100vh; scroll-snap-align: start; display: flex;
       justify-content: center; align-items: center; position: relative; background: transparent;
-      padding: 70px 80px 20px 20px;
+      padding: 70px 90px 20px 20px;
     }
 
     .iframe-wrapper {
@@ -112,8 +113,24 @@
       overflow: hidden; border: 1px solid rgba(255, 255, 255, 0.12); background: #141416;
       box-shadow: 0 12px 40px rgba(0,0,0,0.85); display: flex; justify-content: center; align-items: center;
       position: relative;
+      transition: max-width 0.3s cubic-bezier(0.4, 0, 0.2, 1), height 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     }
-    .iframe-wrapper.video-mode-width { max-width: 420px; }
+
+    /* CẤU HÌNH TỶ LỆ VIDEO LINH HOẠT */
+    .iframe-wrapper.video-wide {
+      max-width: min(1180px, calc(100vw - 130px));
+      height: auto;
+      aspect-ratio: 16 / 9;
+      max-height: 86vh;
+      background: #000;
+    }
+
+    .iframe-wrapper.video-portrait {
+      max-width: 440px;
+      height: 86vh;
+      aspect-ratio: 9 / 16;
+      background: #000;
+    }
 
     /* PDF Wrapper & Zoom Bar */
     .pdf-viewer-outer {
@@ -125,7 +142,6 @@
       background: #18181c;
     }
 
-    /* Thanh công cụ Zoom nổi */
     .pdf-floating-toolbar {
       position: absolute;
       bottom: 24px;
@@ -210,7 +226,6 @@
       background: #141416;
     }
 
-    /* Placeholder PDF Page */
     .pdf-page-wrapper {
       position: relative;
       box-shadow: 0 8px 30px rgba(0, 0, 0, 0.55);
@@ -258,10 +273,14 @@
     .sidebar { position: absolute; right: 20px; bottom: 80px; display: flex; flex-direction: column; gap: 18px; align-items: center; }
     .side-btn {
       background: rgba(255, 255, 255, 0.12); border: none; width: 48px; height: 48px;
-      border-radius: 50%; color: #fff; font-size: 20px; cursor: pointer; backdrop-filter: blur(8px);
+      border-radius: 50%; color: #fff; font-size: 18px; cursor: pointer; backdrop-filter: blur(8px);
       transition: transform 0.2s, background 0.2s;
+      display: flex; justify-content: center; align-items: center;
     }
     .side-btn:hover { transform: scale(1.12); background: rgba(254, 44, 85, 0.85); }
+    .side-btn.btn-active {
+      background: #25f4ee; color: #000;
+    }
 
     .music-disc {
       width: 48px; height: 48px; border-radius: 50%;
@@ -317,6 +336,15 @@
       100% { opacity: 0; transform: scale(0.8) translate(-65px, 50px); }
     }
 
+    .card-placeholder-msg {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      height: 100%; color: #888; font-size: 14px; text-align: center; padding: 20px;
+    }
+    .card-placeholder-msg button {
+      margin-top: 12px; background: rgba(37, 244, 238, 0.15); border: 1px solid #25f4ee;
+      color: #25f4ee; padding: 6px 14px; border-radius: 16px; cursor: pointer; font-weight: bold;
+    }
+
     #file-input { display: none; }
   </style>
 </head>
@@ -334,7 +362,7 @@
     <div class="study-timer" id="timer-display">⏱️ 00:00:00</div>
 
     <div class="controls">
-      <input type="text" id="url-input" class="input-url" placeholder="Dán link YouTube...">
+      <input type="text" id="url-input" class="input-url" placeholder="Dán link YouTube & Enter...">
       <button class="btn" onclick="addUrlLesson()">+ Thêm Link</button>
       <label class="btn" for="file-input" style="background:#25f4ee; color:#000;">+ File Local (PDF/Video)</label>
       <input type="file" id="file-input" multiple accept="video/*,.pdf,.txt,.html">
@@ -348,21 +376,22 @@
           <div style="color:#aaa; text-align:center; margin-top:80px; max-width:550px; line-height: 1.6;">
             <h2 style="color:#25f4ee; margin-bottom:12px;">📖 Chế Độ Đọc Focus & Phóng To Thông Minh</h2>
             <p style="font-size:14px; color:#bbb;">
-              Nhấp vào nút <b style="color:#fff;">[+ File Local]</b> phía trên để tải file PDF của bạn.
+              Nhấp vào nút <b style="color:#fff;">[+ File Local]</b> phía trên để tải file PDF, hoặc dán bất kỳ link bài giảng YouTube nào để bắt đầu.
             </p>
             <div style="margin-top:20px; padding:15px; background:rgba(255,255,255,0.05); border-radius:12px; font-size:13px; text-align:left; color:#ccc;">
-              ✨ <b>Tính năng mới đã kích hoạt:</b><br>
-              • <b>Phóng to / Thu nhỏ:</b> Dùng thanh công cụ nổi hoặc phím tắt <kbd style="background:#333; padding:2px 6px; border-radius:4px;">Ctrl</kbd> + <kbd style="background:#333; padding:2px 6px; border-radius:4px;">Lăn chuột</kbd>.<br>
-              • <b>Độ nét cao:</b> Tự động re-render rõ từng chữ ở mọi mức zoom (lên tới 300%).<br>
-              • <b>Thước dẫn dòng tự nhiên:</b> Lướt chuột để spotlight dòng bạn đang đọc.
+              ✨ <b>Tính năng mới tối ưu hiển thị:</b><br>
+              • <b>Video Tự Phóng To:</b> Video bài giảng tự động mở rộng <b>màn hình ngang 16:9</b> rõ từng chữ slide.<br>
+              • <b>Nút Chuyển Cỡ (↔️ / 📱):</b> Ở cột bên phải, bấm vào để đổi ngay giữa Màn hình rộng và Màn hình dọc TikTok.<br>
+              • <b>Phóng to PDF:</b> Dùng phím tắt <kbd style="background:#333; padding:2px 6px; border-radius:4px;">Ctrl</kbd> + <kbd style="background:#333; padding:2px 6px; border-radius:4px;">Cuộn chuột</kbd>.
             </div>
           </div>
         </div>
       </div>
-      <div class="iframe-wrapper video-mode-width mode-video-view" style="display: none;">
-        <iframe src="https://www.youtube.com/embed/jfKfPfyJRdk" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen style="width:100%;height:100%;border:none;"></iframe>
+      <div class="iframe-wrapper video-wide mode-video-view" style="display: none;">
+        <iframe src="https://www.youtube.com/embed/jfKfPfyJRdk?autoplay=1&rel=0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen style="width:100%;height:100%;border:none;"></iframe>
       </div>
       <div class="sidebar">
+        <button class="side-btn btn-resize-toggle" onclick="toggleVideoSize(this)" title="Đổi cỡ: Ngang Rộng ↔ Dọc TikTok">↔️</button>
         <button class="side-btn">❤️</button>
         <button class="side-btn">🔖</button>
         <div class="music-disc">
@@ -388,7 +417,7 @@
     }
 
     /* ==========================================================================
-       1. HỆ THỐNG HIỆU ỨNG CHUỘT: THƯỚC ĐỌC VÀ HIGHLIGHT FOCUS
+       1. HIỆU ỨNG THƯỚC ĐỌC VÀ HIGHLIGHT FOCUS
        ========================================================================== */
     const rCanvas = document.getElementById('reading-guide-canvas');
     const rCtx = rCanvas.getContext('2d');
@@ -479,7 +508,7 @@
     requestAnimationFrame(drawReadingAssistant);
 
     /* ==========================================================================
-       2. HỆ THỐNG QUẢN LÝ ZOOM & RENDER PDF TẬP TRUNG (SMART LAZY RENDER)
+       2. ZOOM & RENDER PDF TỰ ĐỘNG
        ========================================================================== */
     async function renderPdfToContainer(pdfArrayBuffer, outerWrapper) {
       const container = outerWrapper.querySelector('.pdf-container');
@@ -489,7 +518,7 @@
       const btnZoomFit = outerWrapper.querySelector('.btn-zoom-fit');
       const btnZoomReset = outerWrapper.querySelector('.btn-zoom-reset');
 
-      container.innerHTML = '<div style="color:#aaa; text-align:center; padding: 40px;">⌛ Đang chuẩn bị tài liệu và tối ưu hiển thị...</div>';
+      container.innerHTML = '<div style="color:#aaa; text-align:center; padding: 40px;">⌛ Đang chuẩn bị tài liệu...</div>';
 
       try {
         const dataBytes = new Uint8Array(pdfArrayBuffer);
@@ -502,16 +531,13 @@
         const pdf = await loadingTask.promise;
         container.innerHTML = '';
 
-        // Trích xuất viewport gốc từ trang 1 để đo kích thước nền tảng
         const firstPage = await pdf.getPage(1);
         const baseViewport = firstPage.getViewport({ scale: 1.0 });
         firstPage.cleanup();
 
-        // Tính tỉ lệ ban đầu để vừa vặn khung
         const containerWidth = container.clientWidth > 100 ? (container.clientWidth - 50) : 800;
         let currentScale = Math.min(Math.max(containerWidth / baseViewport.width, 0.7), 1.25);
 
-        // Đối tượng quản lý trạng thái tài liệu
         const pdfState = {
           pdf: pdf,
           baseViewport: baseViewport,
@@ -523,7 +549,6 @@
           observer: null
         };
 
-        // Tạo khung placeholder cho tất cả các trang
         for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
           const wrapper = document.createElement('div');
           wrapper.className = 'pdf-page-wrapper';
@@ -535,7 +560,6 @@
           pdfState.pageWrappers.set(pageNum, wrapper);
         }
 
-        // Tạo IntersectionObserver để Lazy load từng trang khi cuộn tới
         pdfState.observer = new IntersectionObserver((entries) => {
           entries.forEach(entry => {
             const wrapper = entry.target;
@@ -559,30 +583,24 @@
 
         pdfState.pageWrappers.forEach(el => pdfState.observer.observe(el));
 
-        // Hàm cập nhật tỉ lệ Zoom
         function setZoom(newScale) {
-          // Giới hạn zoom từ 40% đến 300%
           newScale = Math.min(Math.max(newScale, 0.4), 3.0);
           pdfState.scale = newScale;
-          zoomText.innerText = `${Math.round(newScale * 100)}%`;
+          if (zoomText) zoomText.innerText = `${Math.round(newScale * 100)}%`;
 
-          // Cập nhật kích thước vật lý của tất cả các trang
           pdfState.pageWrappers.forEach((wrapper) => {
             wrapper.style.width = `${Math.floor(baseViewport.width * newScale)}px`;
             wrapper.style.height = `${Math.floor(baseViewport.height * newScale)}px`;
           });
 
-          // Hủy các trang đang vẽ cũ để vẽ lại theo độ phân giải mới sắc nét
           pdfState.pageRenderTasks.forEach((taskObj, pageNum) => {
             destroyPage(taskObj.wrapper, pageNum, pdfState.pageRenderTasks);
           });
 
-          // Tái kích hoạt observer cho các trang đang nhìn thấy
           pdfState.observer.disconnect();
           pdfState.pageWrappers.forEach(wrapper => pdfState.observer.observe(wrapper));
         }
 
-        // Gán sự kiện cho các nút Zoom
         if (btnZoomIn) btnZoomIn.onclick = () => setZoom(pdfState.scale + 0.15);
         if (btnZoomOut) btnZoomOut.onclick = () => setZoom(pdfState.scale - 0.15);
         if (btnZoomFit) {
@@ -593,7 +611,6 @@
         }
         if (btnZoomReset) btnZoomReset.onclick = () => setZoom(1.0);
 
-        // Hỗ trợ phím tắt Ctrl + Cuộn chuột để Zoom
         container.addEventListener('wheel', (e) => {
           if (e.ctrlKey || e.metaKey) {
             e.preventDefault();
@@ -607,7 +624,7 @@
       } catch (err) {
         console.error("Lỗi nạp PDF:", err);
         container.innerHTML = `<div style="color:#fe2c55; text-align:center; padding: 40px;">
-          ❌ Lỗi đọc PDF: ${err.message || 'Không thể hiển thị tài liệu này.'}
+          ❌ Lỗi đọc PDF: ${err.message || 'Không thể hiển thị tài liệu.'}
         </div>`;
       }
     }
@@ -623,7 +640,6 @@
         const pdfCanvas = document.createElement('canvas');
         const pdfCtx = pdfCanvas.getContext('2d', { alpha: false });
 
-        // Tối ưu DPI màn hình để chữ luôn sắc nét
         const outputScale = Math.min(window.devicePixelRatio || 1, 1.5);
         pdfCanvas.width = Math.floor(viewport.width * outputScale);
         pdfCanvas.height = Math.floor(viewport.height * outputScale);
@@ -633,7 +649,6 @@
         const transform = outputScale !== 1 ? [outputScale, 0, 0, outputScale, 0, 0] : null;
         wrapper.appendChild(pdfCanvas);
 
-        // Lớp TextLayer để bôi đen và đọc chữ
         const textLayerDiv = document.createElement('div');
         textLayerDiv.className = 'textLayer';
         textLayerDiv.style.width = `${Math.floor(viewport.width)}px`;
@@ -648,7 +663,6 @@
         });
 
         pdfState.pageRenderTasks.set(pageNum, { renderTask, page, canvas: pdfCanvas, wrapper });
-
         await renderTask.promise;
 
         try {
@@ -696,7 +710,7 @@
     }
 
     /* ==========================================================================
-       3. BỘ ĐẾM GIỜ & PHẢN ỨNG CỦA NHÂN VẬT CHIBI
+       3. BỘ ĐẾM GIỜ & CHIBI REACTION
        ========================================================================== */
     let secondsElapsed = 0;
     setInterval(() => {
@@ -718,7 +732,7 @@
     }, 1500);
 
     /* ==========================================================================
-       4. CHUYỂN MODE & TẠO CARD NỘI DUNG TIKTOK FEED
+       4. XỬ LÝ CHUYỂN ĐỔI KÍCH THƯỚC VÀ MODE VIDEO
        ========================================================================== */
     let currentMode = 'doc';
     function setGlobalMode(mode) {
@@ -730,10 +744,36 @@
       document.querySelectorAll('.mode-video-view').forEach(el => el.style.display = mode === 'video' ? 'flex' : 'none');
     }
 
+    // Nút đổi tỷ lệ Màn hình Ngang Rộng ↔ Dọc TikTok
+    function toggleVideoSize(btn) {
+      const card = btn.closest('.feed-card');
+      const videoWrapper = card.querySelector('.mode-video-view');
+      if (!videoWrapper) return;
+
+      if (videoWrapper.classList.contains('video-wide')) {
+        videoWrapper.classList.remove('video-wide');
+        videoWrapper.classList.add('video-portrait');
+        btn.innerText = '📱';
+        btn.title = 'Đang ở chuẩn dọc (Shorts) - Bấm để phóng to ngang';
+      } else {
+        videoWrapper.classList.remove('video-portrait');
+        videoWrapper.classList.add('video-wide');
+        btn.innerText = '↔️';
+        btn.title = 'Đang ở chuẩn rộng 16:9 - Bấm để thu gọn dọc';
+      }
+    }
+
     function extractYouTubeId(url) {
-      const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|shorts\/|watch\?v=|\&v=)([^#\&\?]*).*/;
-      const match = url.match(regExp);
-      return (match && match[2].length === 11) ? match[2] : null;
+      if (!url) return null;
+      const cleanUrl = url.trim();
+
+      if (/^[a-zA-Z0-9_-]{11}$/.test(cleanUrl)) {
+        return cleanUrl;
+      }
+
+      const regExp = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=|shorts\/|live\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/i;
+      const match = cleanUrl.match(regExp);
+      return match ? match[1] : null;
     }
 
     function addUrlLesson() {
@@ -742,57 +782,113 @@
       if (!url) return;
 
       const videoId = extractYouTubeId(url);
-      createIframeCard({ videoId: videoId, webUrl: !videoId ? url : null });
+      if (!videoId) {
+        alert("⚠️ Vui lòng dán đúng đường link YouTube!");
+        return;
+      }
+
+      // Nhận diện nếu là YouTube Shorts thì ưu tiên kiểu dọc, còn lại mở rộng tối đa 16:9
+      const isShorts = url.includes('/shorts/');
+
+      setGlobalMode('video');
+      createIframeCard({ videoId: videoId, isVertical: isShorts });
       urlInput.value = '';
     }
+
+    document.getElementById('url-input').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        addUrlLesson();
+      }
+    });
 
     document.getElementById('file-input').addEventListener('change', (e) => {
       Array.from(e.target.files).forEach(file => {
         if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+          setGlobalMode('doc');
           const reader = new FileReader();
           reader.onload = function() {
             createIframeCard({ pdfBuffer: this.result });
           };
           reader.readAsArrayBuffer(file);
         } else if (file.type.startsWith('video/')) {
+          setGlobalMode('video');
           createIframeCard({ localVideoUrl: URL.createObjectURL(file) });
         } else {
+          setGlobalMode('doc');
           createIframeCard({ docUrl: URL.createObjectURL(file) });
         }
       });
       e.target.value = '';
     });
 
-    function createIframeCard({ videoId, localVideoUrl, pdfBuffer, docUrl, webUrl }) {
+    function createIframeCard({ videoId, localVideoUrl, pdfBuffer, docUrl, isVertical = false }) {
       const feed = document.getElementById('feed');
       const card = document.createElement('div');
       card.className = 'feed-card';
 
       const cardId = `pdf-wrapper-${Date.now()}-${Math.floor(Math.random()*1000)}`;
 
+      // Chế độ tài liệu
+      let docInnerHtml = '';
+      if (pdfBuffer) {
+        docInnerHtml = `
+          <div class="pdf-viewer-outer" id="${cardId}">
+            <div class="pdf-floating-toolbar">
+              <button class="zoom-btn btn-zoom-out" title="Thu nhỏ">−</button>
+              <span class="zoom-text">100%</span>
+              <button class="zoom-btn btn-zoom-in" title="Phóng to">+</button>
+              <button class="zoom-btn-action btn-zoom-fit">⤢ Vừa Khung</button>
+              <button class="zoom-btn-action btn-zoom-reset">1:1</button>
+            </div>
+            <div class="pdf-container"></div>
+          </div>
+        `;
+      } else if (docUrl) {
+        docInnerHtml = `<iframe src="${docUrl}" style="width:100%;height:100%;border:none;"></iframe>`;
+      } else {
+        docInnerHtml = `
+          <div class="card-placeholder-msg">
+            <span>🎬 Thẻ này chứa Video/Bài giảng.</span>
+            <button onclick="setGlobalMode('video')">▶ Chuyển sang Chế Độ Video</button>
+          </div>
+        `;
+      }
+
+      // Chế độ video (Tự động áp dụng class video-wide hoặc video-portrait)
+      const videoClass = isVertical ? 'video-portrait' : 'video-wide';
+      let videoInnerHtml = '';
+
+      if (videoId) {
+        videoInnerHtml = `
+          <iframe 
+            src="https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0" 
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
+            allowfullscreen 
+            style="width:100%;height:100%;border:none;">
+          </iframe>
+        `;
+      } else if (localVideoUrl) {
+        videoInnerHtml = `<video src="${localVideoUrl}" controls autoplay loop style="width:100%;height:100%;object-fit:contain;"></video>`;
+      } else {
+        videoInnerHtml = `
+          <div class="card-placeholder-msg">
+            <span>📖 Thẻ này là tài liệu đọc.</span>
+            <button onclick="setGlobalMode('doc')">📖 Chuyển sang Chế Độ Đọc</button>
+          </div>
+        `;
+      }
+
       card.innerHTML = `
         <div class="iframe-wrapper mode-doc-view" style="display: ${currentMode === 'doc' ? 'flex' : 'none'};">
-          <div class="pdf-viewer-outer" id="${cardId}">
-            ${pdfBuffer ? `
-              <div class="pdf-floating-toolbar">
-                <button class="zoom-btn btn-zoom-out" title="Thu nhỏ (Ctrl + Cuộn xuống)">−</button>
-                <span class="zoom-text">100%</span>
-                <button class="zoom-btn btn-zoom-in" title="Phóng to (Ctrl + Cuộn lên)">+</button>
-                <button class="zoom-btn-action btn-zoom-fit" title="Phóng to vừa khung">⤢ Vừa Khung</button>
-                <button class="zoom-btn-action btn-zoom-reset" title="Tỉ lệ chuẩn 100%">1:1</button>
-              </div>
-            ` : ''}
-            <div class="pdf-container">
-              ${docUrl ? `<iframe src="${docUrl}" style="width:100%;height:100%;border:none;"></iframe>` : ''}
-            </div>
-          </div>
+          ${docInnerHtml}
         </div>
-        <div class="iframe-wrapper video-mode-width mode-video-view" style="display: ${currentMode === 'video' ? 'flex' : 'none'};">
-          ${videoId ? `<iframe src="https://www.youtube.com/embed/${videoId}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen style="width:100%;height:100%;border:none;"></iframe>` : ''}
-          ${localVideoUrl ? `<video src="${localVideoUrl}" controls loop style="width:100%;height:100%;object-fit:cover;"></video>` : ''}
-          ${webUrl ? `<iframe src="${webUrl}" style="width:100%;height:100%;border:none;"></iframe>` : ''}
+        <div class="iframe-wrapper ${videoClass} mode-video-view" style="display: ${currentMode === 'video' ? 'flex' : 'none'};">
+          ${videoInnerHtml}
         </div>
         <div class="sidebar">
+          <button class="side-btn btn-resize-toggle" onclick="toggleVideoSize(this)" title="Đổi cỡ: Ngang Rộng ↔ Dọc TikTok">
+            ${isVertical ? '📱' : '↔️'}
+          </button>
           <button class="side-btn">❤️</button>
           <button class="side-btn">🔖</button>
           <div class="music-disc">
@@ -807,6 +903,22 @@
 
       feed.appendChild(card);
       card.scrollIntoView({ behavior: 'smooth' });
+
+      // Nếu là video tải từ máy tính, tự kiểm tra kích thước gốc để chỉnh tỉ lệ
+      if (localVideoUrl) {
+        const vid = card.querySelector('video');
+        if (vid) {
+          vid.onloadedmetadata = function() {
+            const wrapper = card.querySelector('.mode-video-view');
+            const btnToggle = card.querySelector('.btn-resize-toggle');
+            if (this.videoWidth < this.videoHeight) {
+              wrapper.classList.remove('video-wide');
+              wrapper.classList.add('video-portrait');
+              btnToggle.innerText = '📱';
+            }
+          };
+        }
+      }
 
       if (pdfBuffer) {
         const outerWrapper = document.getElementById(cardId);
